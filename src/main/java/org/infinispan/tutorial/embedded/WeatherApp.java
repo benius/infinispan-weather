@@ -1,7 +1,11 @@
 package org.infinispan.tutorial.embedded;
 
+import org.infinispan.Cache;
+import org.infinispan.configuration.cache.ConfigurationBuilder;
 import org.infinispan.manager.DefaultCacheManager;
 import org.infinispan.manager.EmbeddedCacheManager;
+
+import java.util.concurrent.TimeUnit;
 
 public class WeatherApp {
 
@@ -17,21 +21,32 @@ public class WeatherApp {
 
     private final EmbeddedCacheManager cacheManager;
 
+    private Cache<String, LocationWeather> cache;
+
     private final WeatherService weatherService;
 
     public WeatherApp() throws InterruptedException {
         cacheManager = new DefaultCacheManager();
+
+        ConfigurationBuilder configurationBuilder = new ConfigurationBuilder();
+
+        configurationBuilder.expiration().lifespan(5, TimeUnit.SECONDS);
+
+        cacheManager.defineConfiguration("weather", configurationBuilder.build());
+
+        cache = cacheManager.getCache("weather");
 
         weatherService = initWeatherService();
     }
 
     private WeatherService initWeatherService() {
         String apiKey = System.getenv("OWMAPIKEY");
+        
         if (apiKey == null) {
             System.out.println("WARNING: OWMAPIKEY environment variable not set, using the RandomWeatherService.");
-            return new RandomWeatherService();
+            return new RandomWeatherService(cache);
         } else {
-            return new OpenWeatherMapService(apiKey);
+            return new OpenWeatherMapService(apiKey, cache);
         }
     }
 
@@ -53,6 +68,10 @@ public class WeatherApp {
         WeatherApp app = new WeatherApp();
 
         app.fetchWeather();
+
+        app.fetchWeather();
+
+        TimeUnit.SECONDS.sleep(5);
 
         app.fetchWeather();
 
