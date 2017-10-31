@@ -2,8 +2,6 @@ package org.infinispan.tutorial.embedded;
 
 import org.infinispan.Cache;
 
-import java.util.concurrent.TimeUnit;
-
 /**
  * <code>CachingWeatherService</code> supports caching weather data.
  */

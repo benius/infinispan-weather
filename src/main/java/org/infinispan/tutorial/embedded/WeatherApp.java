@@ -1,7 +1,9 @@
 package org.infinispan.tutorial.embedded;
 
 import org.infinispan.Cache;
+import org.infinispan.configuration.cache.CacheMode;
 import org.infinispan.configuration.cache.ConfigurationBuilder;
+import org.infinispan.configuration.global.GlobalConfigurationBuilder;
 import org.infinispan.manager.DefaultCacheManager;
 import org.infinispan.manager.EmbeddedCacheManager;
 
@@ -25,18 +27,40 @@ public class WeatherApp {
 
     private final WeatherService weatherService;
 
+    private final ClusterListener clusterListener;
+
     public WeatherApp() throws InterruptedException {
-        cacheManager = new DefaultCacheManager();
+        // global - cluster configuration
 
-        ConfigurationBuilder configurationBuilder = new ConfigurationBuilder();
+        GlobalConfigurationBuilder configurationBuilder = GlobalConfigurationBuilder.defaultClusteredBuilder();
+        configurationBuilder.transport().clusterName("WeatherApp");
 
-        configurationBuilder.expiration().lifespan(5, TimeUnit.SECONDS);
+        cacheManager = new DefaultCacheManager(configurationBuilder.build());
 
-        cacheManager.defineConfiguration("weather", configurationBuilder.build());
+        // listener
+
+        clusterListener = new ClusterListener(2);
+
+        cacheManager.addListener(clusterListener);
+
+        // config
+
+        ConfigurationBuilder config = new ConfigurationBuilder();
+        
+        config.expiration().lifespan(5, TimeUnit.SECONDS)
+              .clustering().cacheMode(CacheMode.DIST_SYNC);
+
+        cacheManager.defineConfiguration("weather", config.build());
 
         cache = cacheManager.getCache("weather");
 
         weatherService = initWeatherService();
+
+        System.out.println("---- Waiting for cluster to complet initialization ----");
+
+        clusterListener.clusterFormedLatch.await();
+
+        System.out.println("---- Initialized completed ----");
     }
 
     private WeatherService initWeatherService() {
@@ -60,7 +84,19 @@ public class WeatherApp {
         System.out.printf("---- Fetched in %dms ----\n", System.currentTimeMillis() - start);
     }
 
-    public void shutdown() {
+    public void shutdown() throws InterruptedException {
+        // If the local node is coordinator node, shutdown directly without waiting,
+        // so the one of the other non-coordinator nodes will become the coordinator node?
+        if (!cacheManager.isCoordinator()) {
+            System.out.println("Non-coordinator node waits for shutdown.");
+
+            clusterListener.shutdownLatch.await();
+
+            System.out.println("Non-coordinator node ready to shutdown.");
+        } else {
+            System.out.println("Coordinator node shutdown directly without waiting.");
+        }
+
         cacheManager.stop();
     }
 
