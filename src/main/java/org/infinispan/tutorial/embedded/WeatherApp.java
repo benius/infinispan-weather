@@ -54,6 +54,8 @@ public class WeatherApp {
 
         cache = cacheManager.getCache("weather");
 
+        cache.addListener(new CacheListener());
+
         weatherService = initWeatherService();
 
         System.out.println("---- Waiting for cluster to complet initialization ----");
@@ -103,13 +105,15 @@ public class WeatherApp {
     public static void main(String[] args) throws Exception {
         WeatherApp app = new WeatherApp();
 
-        app.fetchWeather();
+        if (app.cacheManager.isCoordinator()) {
+            app.fetchWeather();
 
-        app.fetchWeather();
+            app.fetchWeather();
 
-        TimeUnit.SECONDS.sleep(5);
+            TimeUnit.SECONDS.sleep(5);
 
-        app.fetchWeather();
+            app.fetchWeather();
+        }
 
         app.shutdown();
     }
